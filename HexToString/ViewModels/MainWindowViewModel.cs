@@ -1,6 +1,6 @@
 ﻿using Prism.Commands;
 using Prism.Mvvm;
-using System;
+using HexToString.Service;
 using System.IO;
 using System.Text;
 using System.Windows;
@@ -9,6 +9,8 @@ namespace HexToString.ViewModels
 {
     public class MainWindowViewModel : BindableBase
     {
+        private IMessageService _messageService;
+
         private string _title = "Prism Application";
         public string Title
         {
@@ -33,8 +35,14 @@ namespace HexToString.ViewModels
         public DelegateCommand ExecuteCmd { get; }
         public DelegateCommand CopyToClipboardCmd { get; }
 
-        public MainWindowViewModel()
+        public MainWindowViewModel() : this( new MessageService())
         {
+        }
+
+        public MainWindowViewModel(IMessageService messageService)
+        {
+            _messageService = messageService;
+
             ExecuteCmd = new DelegateCommand(ExecuteHexToStr);
             CopyToClipboardCmd = new DelegateCommand(CopyToClipboardExecute);
         }
@@ -44,43 +52,63 @@ namespace HexToString.ViewModels
             string path = FilePath;
             Encoding enc = Encoding.GetEncoding("utf-8");
 
-            using (FileStream fs = new FileStream(path, FileMode.Open))
-            using (BinaryReader br = new BinaryReader(fs))
-            using (var writer = new StreamWriter(@"test.txt", false /*append*/, enc))
-            using (var baseStreasm = br.BaseStream)
+            if (path == null)
             {
-                var charCount = 0;
-                var newLine = false;
-                var str = string.Empty;
-                while (baseStreasm.Position != baseStreasm.Length)
-                {
-                    if (newLine)
-                    {
-                        str += ", ";
-                        str += "\n";
-                        newLine = false;
-                    }
+                _messageService.ShowDialog("ファイルパスを入力してください");
+                return;
+            }
 
-                    var byteData = br.ReadByte();
-                    str += string.Format(@"0x{0:x2}", byteData);
-                    charCount++;
-                    if (charCount == 16)
+
+            try
+            {
+                using (FileStream fs = new FileStream(path, FileMode.Open))
+                using (BinaryReader br = new BinaryReader(fs))
+                using (var writer = new StreamWriter(@"test.txt", false /*append*/, enc))
+                using (var baseStreasm = br.BaseStream)
+                {
+                    var charCount = 0;
+                    var newLine = false;
+                    var str = string.Empty;
+                    while (baseStreasm.Position != baseStreasm.Length)
                     {
-                        charCount = 0;
-                        newLine = true;
-                    } else
-                    {
-                        str += ", ";
+                        if (newLine)
+                        {
+                            str += ", ";
+                            str += "\n";
+                            newLine = false;
+                        }
+
+                        var byteData = br.ReadByte();
+                        str += string.Format(@"0x{0:x2}", byteData);
+                        charCount++;
+                        if (charCount == 16)
+                        {
+                            charCount = 0;
+                            newLine = true;
+                        }
+                        else
+                        {
+                            str += ", ";
+                        }
                     }
+                    OutHexStr = str;
+                    writer.Write(str);
                 }
-                OutHexStr = str;
-                writer.Write(str);
+            }
+            catch (System.IO.FileNotFoundException)
+            {
+                _messageService.ShowDialog("ファイルが見つかりませんでした。");
+            }
+            catch (System.IO.FileLoadException)
+            {
+                _messageService.ShowDialog("ファイルが開けませんでした。");
             }
         }
 
         public void CopyToClipboardExecute()
         {
             Clipboard.SetText(OutHexStr);
+            _messageService.ShowDialog("コピーしました。");
         }
     }
 }
